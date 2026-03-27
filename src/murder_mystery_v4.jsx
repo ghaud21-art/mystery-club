@@ -142,7 +142,7 @@ function calcStyles(ans){
 }
 
 // ── API 설정 ──────────────────────────────────────
-const API_URL = "https://script.google.com/macros/s/AKfycbwkNhiPZsC6rIL4EQ52bXERVrWIIf6uL4TtQ2UpxhyCVc4NgH62hGmNXgUPTaq40bwd/exec"; // ← 배포 후 교체!
+const API_URL = "https://script.google.com/macros/s/AKfycbxJJuCHoPSz2IO9D6sLbIZv4cMKsjYXL-o3Y3L_AIWLuH-9GfLrf6XZZ8CkZJr0dOYa/exec"; // ← 배포 후 교체!
 
 async function apiGet(action, params={}) {
   try {
