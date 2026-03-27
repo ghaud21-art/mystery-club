@@ -274,8 +274,8 @@ function Login({mbs,onLogin,onSignup}){
       <div style={{width:400,background:T.card,borderRadius:20,padding:"44px 38px",border:`1px solid ${T.border}`,boxShadow:"0 8px 40px rgba(92,60,24,.14)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{fontSize:38,marginBottom:8}}>🕯</div>
-          <div style={{fontSize:24,fontWeight:900,color:T.gold,letterSpacing:-0.5}}>Mystery Club</div>
-          <div style={{fontSize:11,color:T.muted,marginTop:4,letterSpacing:3,fontWeight:500}}>DETECTIVE SOCIETY</div>
+          <div style={{fontSize:22,fontWeight:900,color:T.gold,letterSpacing:-0.5}}>머더 미스터리 기록</div>
+          <div style={{fontSize:11,color:T.muted,marginTop:4,letterSpacing:2,fontWeight:500}}>MURDER MYSTERY RECORD</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:13,marginBottom:6}}>
           <Fld label="아이디">
@@ -462,8 +462,8 @@ function Sidebar({page,setPage,me,badge,onLogout}){
   return (
     <div style={{width:214,background:T.card,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",position:"sticky",top:0,height:"100vh"}}>
       <div style={{padding:"20px 18px 14px",borderBottom:`1px solid ${T.border}`}}>
-        <div style={{fontFamily:"'Noto Sans KR',sans-serif",fontSize:16,fontWeight:700,color:T.gold}}>🕯 Mystery Club</div>
-        <div style={{fontSize:9,color:T.muted,letterSpacing:2,marginTop:2}}>DETECTIVE SOCIETY</div>
+        <div style={{fontFamily:"'Noto Sans KR',sans-serif",fontSize:13,fontWeight:900,color:T.gold}}>머더 미스터리 기록</div>
+        <div style={{fontSize:9,color:T.muted,letterSpacing:1,marginTop:2}}>MURDER MYSTERY RECORD</div>
       </div>
       <nav style={{flex:1,padding:"8px 0",overflowY:"auto"}}>
         {NAV.map(n=>{
@@ -1015,9 +1015,9 @@ function RecForm({scens,me,init,onSave,onClose}){
 
 function ScenForm({me,onSave,onClose}){
   const [f,setF]=useState({title:"",theme:"공포",pl:"4-6",time:120,diff:3,tags:"",note:"",st:"pending"});
-  const [chars,setChars]=useState([{name:"",hint:"",roleType:"조연"}]);
+  const [chars,setChars]=useState([{name:"",hint:""}]);
   const u=(k,v)=>setF(p=>({...p,[k]:v}));
-  const addChar=()=>setChars(p=>[...p,{name:"",hint:"",roleType:"조연"}]);
+  const addChar=()=>setChars(p=>[...p,{name:"",hint:""}]);
   const rmChar=i=>setChars(p=>p.filter((_,idx)=>idx!==i));
   const updateChar=(i,k,v)=>setChars(p=>p.map((c,idx)=>idx===i?{...c,[k]:v}:c));
   return(
@@ -1038,11 +1038,8 @@ function ScenForm({me,onSave,onClose}){
         </div>
         {chars.map((c,i)=>(
           <div key={i} style={{display:"flex",gap:7,marginBottom:7,alignItems:"center"}}>
-            <input value={c.name} onChange={e=>updateChar(i,"name",e.target.value)} placeholder="이름" style={{...inp,flex:1}} />
-            <input value={c.hint} onChange={e=>updateChar(i,"hint",e.target.value)} placeholder="힌트 (공개)" style={{...inp,flex:2}} />
-            <select value={c.roleType} onChange={e=>updateChar(i,"roleType",e.target.value)} style={{...inp,flex:1,width:"auto"}}>
-              {["탐정","범인","조연","피해자","목격자"].map(r=><option key={r}>{r}</option>)}
-            </select>
+            <input value={c.name} onChange={e=>updateChar(i,"name",e.target.value)} placeholder="캐릭터 이름" style={{...inp,flex:1}} />
+            <input value={c.hint} onChange={e=>updateChar(i,"hint",e.target.value)} placeholder="캐릭터 설명 (공개)" style={{...inp,flex:2}} />
             {chars.length>1&&<button className="btn" onClick={()=>rmChar(i)} style={{color:T.red,background:"none",fontSize:16,flexShrink:0}}>✕</button>}
           </div>
         ))}
