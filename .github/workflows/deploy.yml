@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm npm install
+        run: npm install
 
       - name: Build
         run: npm run build
@@ -26,4 +26,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          cname: 여기에_구매한_도메인.com
