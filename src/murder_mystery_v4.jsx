@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ── 스타일 설문 (10문항) ───────────────────────────
 const SURVEY = [
