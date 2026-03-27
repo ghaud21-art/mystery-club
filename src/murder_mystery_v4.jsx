@@ -143,15 +143,29 @@ function calcStyles(ans){
 
 // ── API 설정 ──────────────────────────────────────
 const API_URL = "https://script.google.com/macros/s/AKfycbxJJuCHoPSz2IO9D6sLbIZv4cMKsjYXL-o3Y3L_AIWLuH-9GfLrf6XZZ8CkZJr0dOYa/exec"; // ← 배포 후 교체!
+const PROXY = "https://corsproxy.io/?url="; // CORS 우회 프록시
+
+async function apiFetch(urlStr) {
+  // 직접 요청 먼저 시도, 실패 시 프록시 사용
+  try {
+    const res = await fetch(urlStr, {redirect:"follow", mode:"cors"});
+    const text = await res.text();
+    return JSON.parse(text);
+  } catch(e) {
+    // CORS 오류 시 프록시로 재시도
+    console.log("🔄 프록시 사용...");
+    const res = await fetch(PROXY + encodeURIComponent(urlStr));
+    const text = await res.text();
+    return JSON.parse(text);
+  }
+}
 
 async function apiGet(action, params={}) {
   try {
     const url = new URL(API_URL);
     url.searchParams.set("action", action);
     Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
-    const res = await fetch(url.toString(), {redirect:"follow"});
-    const text = await res.text();
-    const json = JSON.parse(text);
+    const json = await apiFetch(url.toString());
     if(!json.ok) throw new Error(json.error);
     return json.data;
   } catch(e) { console.error("❌ API GET 오류:", action, e.message); throw e; }
@@ -159,7 +173,6 @@ async function apiGet(action, params={}) {
 
 async function apiPost(action, data={}, id=null) {
   try {
-    // 객체/배열은 JSON 문자열로 직렬화
     const clean = {};
     Object.entries(data).forEach(([k,v])=>{
       if(v===undefined||v===null) return;
@@ -169,11 +182,9 @@ async function apiPost(action, data={}, id=null) {
     url.searchParams.set("action", action);
     url.searchParams.set("data", JSON.stringify(clean));
     if(id !== null) url.searchParams.set("id", String(id));
-    console.log("📤 API 요청:", action, url.toString().slice(0,120)+"...");
-    const res = await fetch(url.toString(), {redirect:"follow"});
-    const text = await res.text();
-    console.log("📥 API 응답:", text.slice(0,200));
-    const json = JSON.parse(text);
+    console.log("📤 API 요청:", action);
+    const json = await apiFetch(url.toString());
+    console.log("📥 API 응답:", JSON.stringify(json).slice(0,100));
     if(!json.ok) throw new Error(json.error);
     return json.data;
   } catch(e) { console.error("❌ API 오류:", action, e.message); throw e; }
