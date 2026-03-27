@@ -153,16 +153,17 @@ async function apiGet(action, params={}) {
 
 async function apiPost(action, data={}, id=null) {
   try {
-    // Apps Script는 POST CORS를 막으므로 GET으로 우회
-    const url = new URL(API_URL);
-    url.searchParams.set("action", action);
-    url.searchParams.set("data", JSON.stringify(data));
-    if(id !== null) url.searchParams.set("id", String(id));
-    const res = await fetch(url.toString());
+    const body = {action, data};
+    if(id!==null) body.id = id;
+    const res = await fetch(API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body),
+    });
     const json = await res.json();
     if(!json.ok) throw new Error(json.error);
     return json.data;
-  } catch(e) { console.error("API 오류:", e); throw e; }
+  } catch(e) { console.error("API POST 오류:", e); throw e; }
 }
 
 // ── ROOT ──────────────────────────────────────────
@@ -239,7 +240,7 @@ export default function App(){
 
   if(!me){
     if(auth==="signup") return <Signup onDone={m=>{setMbs(p=>[...p,m]);setMe(m);setPage("dash");setAuth("login");}} onBack={()=>setAuth("login")} ids={mbs.map(m=>m.id)} />;
-    return <Login mbs={mbs} onLogin={m=>{setMe(m);setPage("dash");loadScenarios();loadMembers();}} onSignup={()=>setAuth("signup")} />;
+    return <Login mbs={mbs} onLogin={m=>{setMe(m);setPage("dash");loadScenarios();loadMembers();}} onSignup={()=>setAuth("signup")} onRefreshMbs={setMbs} />;
   }
   const pending=scens.filter(s=>!s.ok&&s.st==="pending");
   const props={me:meD,mbs,grps,recs,schs,scens,onNav:setPage,onAttend:toggleAtt};
@@ -255,7 +256,7 @@ export default function App(){
           {page==="fri" &&<Friends {...props} onAddFri={addFri} />}
           {page==="grp" &&<Groups {...props} onAdd={()=>setModal({t:"aG"})} />}
           {page==="all" &&<AllRecs {...props} onAdd={()=>setModal({t:"aR"})} />}
-          {page==="sc"  &&<Scenarios {...props} onSubmit={()=>setModal({t:"aS"})} onApprove={approveSc} onReject={rejectSc} loading={scLoading} />}
+          {page==="sc"  &&<Scenarios {...props} recs={recs} mbs={mbs} onSubmit={()=>setModal({t:"aS"})} onApprove={approveSc} onReject={rejectSc} loading={scLoading} />}
           {page==="sch" &&<Schedule {...props} onAdd={()=>setModal({t:"aSch"})} />}
           {page==="rec" &&<Recommend {...props} />}
           {page==="hof" &&<HoF {...props} />}
@@ -271,15 +272,27 @@ export default function App(){
 }
 
 // ── LOGIN ─────────────────────────────────────────
-function Login({mbs,onLogin,onSignup}){
+function Login({mbs,onLogin,onSignup,onRefreshMbs}){
   const [id,setId]=useState("");
   const [pw,setPw]=useState("");
   const [err,setErr]=useState("");
-  const go=()=>{
+  const go=async ()=>{
     if(!id.trim()||!pw.trim()){setErr("아이디와 비밀번호를 입력해주세요.");return;}
-    const found=mbs.find(m=>m.name===id.trim());
+    // 먼저 로컬에서 찾기
+    let found=mbs.find(m=>m.name===id.trim());
+    // 없으면 시트에서 다시 로드 후 재시도
+    if(!found&&!API_URL.includes("여기에")){
+      setErr("확인 중...");
+      try{
+        const freshMbs=await apiGet("getMembers");
+        if(freshMbs&&freshMbs.length>0){
+          onRefreshMbs(freshMbs);
+          found=freshMbs.find(m=>m.name===id.trim());
+        }
+      }catch(e){}
+    }
     if(!found){setErr("존재하지 않는 아이디입니다.");setTimeout(()=>setErr(""),1800);return;}
-    if(found.pw!==pw){setErr("비밀번호가 틀렸습니다.");setTimeout(()=>setErr(""),1800);return;}
+    if(String(found.pw)!==String(pw)){setErr("비밀번호가 틀렸습니다.");setTimeout(()=>setErr(""),1800);return;}
     onLogin(found);
   };
   return (
@@ -327,7 +340,6 @@ function Signup({onDone,onBack,ids}){
   const [uploaded,setUploaded]=useState(0);
   const [result,setResult]=useState(null);
   const fileRef=useRef();
-  const AVS=["🕵️","🌸","🎭","⚡","📐","🔮","🩸","🎪","🦊","🌙"];
   const total=SURVEY.length+3;
 
   const handleFile=e=>{
@@ -355,8 +367,8 @@ function Signup({onDone,onBack,ids}){
   const pct=Math.round((step/total)*100);
 
   return (
-    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:500,background:T.card,borderRadius:20,padding:38,border:`1px solid ${T.border}`,boxShadow:"0 8px 40px rgba(92,60,24,.14)"}}>
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+      <div style={{width:"100%",maxWidth:480,background:T.card,borderRadius:20,padding:"36px 32px",border:`1px solid ${T.border}`,boxShadow:"0 8px 40px rgba(92,60,24,.14)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
           <div style={{fontFamily:"'Noto Sans KR',sans-serif",fontSize:19,fontWeight:700,color:T.gold}}>🕯 탐정 등록</div>
           <div style={{fontSize:12,color:T.muted}}>Step {step+1}/{total}</div>
@@ -370,14 +382,15 @@ function Signup({onDone,onBack,ids}){
             <div style={{fontSize:15,fontWeight:700,color:T.text,marginBottom:18}}>기본 정보 입력</div>
             <Fld label="닉네임"><input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="탐정 이름" style={{...inp,marginBottom:12}} /></Fld>
             <Fld label="비밀번호"><input type="password" value={form.pw} onChange={e=>setForm(p=>({...p,pw:e.target.value}))} style={{...inp,marginBottom:14}} /></Fld>
-            <Fld label="아바타 선택">
-              <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:6,marginBottom:22}}>
-                {AVS.map(av=>(
-                  <div key={av} onClick={()=>setForm(p=>({...p,av}))}
-                    style={{width:42,height:42,borderRadius:"50%",background:form.av===av?T.goldL:T.paper,
-                      border:`2px solid ${form.av===av?T.gold:T.border}`,display:"flex",alignItems:"center",
-                      justifyContent:"center",fontSize:21,cursor:"pointer"}}>{av}</div>
-                ))}
+            <Fld label="아바타 이모지">
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4,marginBottom:16}}>
+                <div style={{width:56,height:56,borderRadius:"50%",background:T.goldL,border:`2px solid ${T.gold}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,flexShrink:0}}>{form.av||"🕵️"}</div>
+                <div style={{flex:1}}>
+                  <input value={form.av} onChange={e=>setForm(p=>({...p,av:e.target.value}))}
+                    placeholder="이모지 입력 (예: 🦊 🎭 🌸)"
+                    style={{...inp,fontSize:18}} maxLength={4} />
+                  <div style={{fontSize:11,color:T.muted,marginTop:4}}>이모지를 직접 입력하거나 복붙하세요</div>
+                </div>
               </div>
             </Fld>
             <GBtn full disabled={!form.name||!form.pw} onClick={()=>setStep(1)}>다음 →</GBtn>
@@ -604,6 +617,11 @@ function MyPage({me,recs,scens,onAdd,onEdit,onDel}){
           <div style={{display:"flex",gap:7,flexDirection:"column",alignItems:"flex-end"}}>
             <GBtn onClick={onAdd}>+ 기록 추가</GBtn>
             <button className="btn" onClick={()=>fileRef.current?.click()} style={{padding:"6px 13px",fontSize:12,color:T.gold,background:"transparent",border:`1.5px solid ${T.gold}`,borderRadius:7}}>📂 일괄 업로드</button>
+            <button className="btn" onClick={()=>{
+              const csv="날짜,시나리오,결과,역할,평점,후기\n2025-01-01,검은 저택의 비밀,성공,탐정,5,정말 재미있었어요!\n2025-02-15,베네치아의 독,실패,조연,4,다음엔 꼭 성공할거야";
+              const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+              const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="머더미스터리_기록_양식.csv";a.click();
+            }} style={{padding:"6px 13px",fontSize:12,color:T.green,background:"transparent",border:`1.5px solid ${T.green}`,borderRadius:7}}>📥 양식 다운로드</button>
             <input ref={fileRef} type="file" accept=".csv,.xlsx" onChange={handleFile} style={{display:"none"}} />
           </div>
         </div>
@@ -838,7 +856,7 @@ function AllRecs({recs,scens,mbs,me,onAdd}){
 }
 
 // ── SCENARIOS ─────────────────────────────────────
-function Scenarios({scens,me,onSubmit,onApprove,onReject,loading}){
+function Scenarios({scens,me,recs,mbs,onSubmit,onApprove,onReject,loading}){
   const [filter,setFilter]=useState("전체");
   const [expanded,setExpanded]=useState(null);
   const themes=["전체","공포","로맨스","고전","미스터리","스릴러","코미디"];
@@ -890,7 +908,27 @@ function Scenarios({scens,me,onSubmit,onApprove,onReject,loading}){
                 ))}
               </div>
             )}
-            {s.characters?.length>0&&<div style={{fontSize:11,color:T.gold,marginTop:8,textAlign:"center"}}>{expanded===s.id?"▲ 접기":"▼ 등장인물 보기"}</div>}
+            {(s.characters?.length>0||true)&&<div style={{fontSize:11,color:T.gold,marginTop:8,textAlign:"center"}}>{expanded===s.id?"▲ 접기":"▼ 클릭해서 상세 보기"}</div>}
+            {expanded===s.id&&(()=>{
+              const scRecs=recs.filter(r=>r.scId===s.id&&r.rev);
+              return scRecs.length>0?(
+                <div style={{marginTop:10,borderTop:`1px solid ${T.border}`,paddingTop:10}} onClick={e=>e.stopPropagation()}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.gold,marginBottom:8}}>💬 플레이 후기 ({scRecs.length}건)</div>
+                  {scRecs.map(r=>{const mb=mbs.find(m=>m.id===r.mvp);const reviewer=mbs.find(m=>r.mbs?.includes(m.id));return(
+                    <div key={r.id} style={{padding:"8px 10px",background:T.paper,borderRadius:7,marginBottom:6,borderLeft:`3px solid ${T.gold}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:11,color:T.sub}}>{r.date} · {"⭐".repeat(Math.max(...Object.values(r.rats||{1:4})))}</span>
+                        <Pill ok={r.res==="성공"}>{r.res}</Pill>
+                      </div>
+                      <div className={r.sp?"spoiler":""} style={{fontSize:12,color:T.text,lineHeight:1.6}}>
+                        {r.sp&&<span style={{fontSize:10,color:T.red,marginRight:4}}>[스포주의]</span>}
+                        {r.rev}
+                      </div>
+                    </div>
+                  );})}
+                </div>
+              ):null;
+            })()}
           </div>
         ))}
       </div>
