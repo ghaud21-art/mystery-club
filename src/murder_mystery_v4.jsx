@@ -129,6 +129,36 @@ function calcStyles(ans){
   return{style:sorted[0]?.[0]||"분석형", style2:sorted[1]?.[0]||null};
 }
 
+// ── API 설정 ──────────────────────────────────────
+const API_URL = "https://script.google.com/macros/s/AKfycbw5XZ0O1iTIQh7X5cfNx4JcTa8flzA0h2ES5PK0lZUk8iWpf5n0ttmnfsO67U-_5EdO/exec"; // ← 배포 후 교체!
+
+async function apiGet(action, params={}) {
+  try {
+    const url = new URL(API_URL);
+    url.searchParams.set("action", action);
+    Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+    const res = await fetch(url.toString());
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error);
+    return json.data;
+  } catch(e) { console.error("API GET 오류:", e); throw e; }
+}
+
+async function apiPost(action, data={}, id=null) {
+  try {
+    const body = {action, data};
+    if(id!==null) body.id = id;
+    const res = await fetch(API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error);
+    return json.data;
+  } catch(e) { console.error("API POST 오류:", e); throw e; }
+}
+
 // ── ROOT ──────────────────────────────────────────
 export default function App(){
   const [auth,setAuth]=useState("login");
@@ -140,15 +170,48 @@ export default function App(){
   const [schs,setSchs]=useState(INIT_SC);
   const [scens,setScens]=useState(SCENS);
   const [modal,setModal]=useState(null);
+  const [scLoading,setScLoading]=useState(false);
   const close=()=>setModal(null);
   const meD=mbs.find(m=>m.id===me?.id)||me;
+
+  // 시나리오 API 로드 (로그인 후)
+  const loadScenarios = async () => {
+    if(API_URL.includes("여기에")) return; // URL 미설정 시 스킵
+    setScLoading(true);
+    try {
+      const data = await apiGet("getScenarios");
+      if(data && data.length >= 0) setScens(data);
+    } catch(e) { console.log("시나리오 로컬 모드로 실행"); }
+    finally { setScLoading(false); }
+  };
 
   const addRec=r=>{setRecs(p=>[...p,{...r,id:Date.now()}]);close();};
   const updRec=r=>{setRecs(p=>p.map(x=>x.id===r.id?r:x));close();};
   const delRec=id=>setRecs(p=>p.filter(r=>r.id!==id));
-  const addScen=s=>{setScens(p=>[...p,{...s,id:Date.now()}]);close();};
-  const approveSc=id=>setScens(p=>p.map(s=>s.id===id?{...s,ok:true}:s));
-  const rejectSc=id=>setScens(p=>p.filter(s=>s.id!==id));
+
+  const addScen=async s=>{
+    const newS={...s,id:Date.now()};
+    if(!API_URL.includes("여기에")){
+      try { const saved=await apiPost("addScenario",newS); setScens(p=>[...p,saved]); close(); return; } catch(e){}
+    }
+    setScens(p=>[...p,newS]);close();
+  };
+  const approveSc=async id=>{
+    const sc=scens.find(s=>s.id===id);
+    if(!sc)return;
+    const updated={...sc,ok:true};
+    if(!API_URL.includes("여기에")){
+      try { await apiPost("updateScenario",updated); } catch(e){}
+    }
+    setScens(p=>p.map(s=>s.id===id?updated:s));
+  };
+  const rejectSc=async id=>{
+    if(!API_URL.includes("여기에")){
+      try { await apiPost("deleteScenario",{},id); } catch(e){}
+    }
+    setScens(p=>p.filter(s=>s.id!==id));
+  };
+
   const addSch=s=>{setSchs(p=>[...p,{...s,id:Date.now(),att:[me.id]}]);close();};
   const toggleAtt=id=>setSchs(p=>p.map(s=>{if(s.id!==id)return s;const h=s.att.includes(me.id);return{...s,att:h?s.att.filter(i=>i!==me.id):[...s.att,me.id]};}));
   const addFri=fid=>{
@@ -163,7 +226,7 @@ export default function App(){
 
   if(!me){
     if(auth==="signup") return <Signup onDone={m=>{setMbs(p=>[...p,m]);setMe(m);setPage("dash");setAuth("login");}} onBack={()=>setAuth("login")} ids={mbs.map(m=>m.id)} />;
-    return <Login mbs={mbs} onLogin={m=>{setMe(m);setPage("dash");}} onSignup={()=>setAuth("signup")} />;
+    return <Login mbs={mbs} onLogin={m=>{setMe(m);setPage("dash");loadScenarios();}} onSignup={()=>setAuth("signup")} />;
   }
   const pending=scens.filter(s=>!s.ok&&s.st==="pending");
   const props={me:meD,mbs,grps,recs,schs,scens,onNav:setPage,onAttend:toggleAtt};
@@ -179,7 +242,7 @@ export default function App(){
           {page==="fri" &&<Friends {...props} onAddFri={addFri} />}
           {page==="grp" &&<Groups {...props} onAdd={()=>setModal({t:"aG"})} />}
           {page==="all" &&<AllRecs {...props} onAdd={()=>setModal({t:"aR"})} />}
-          {page==="sc"  &&<Scenarios {...props} onSubmit={()=>setModal({t:"aS"})} onApprove={approveSc} onReject={rejectSc} />}
+          {page==="sc"  &&<Scenarios {...props} onSubmit={()=>setModal({t:"aS"})} onApprove={approveSc} onReject={rejectSc} loading={scLoading} />}
           {page==="sch" &&<Schedule {...props} onAdd={()=>setModal({t:"aSch"})} />}
           {page==="rec" &&<Recommend {...props} />}
           {page==="hof" &&<HoF {...props} />}
@@ -756,7 +819,7 @@ function AllRecs({recs,scens,mbs,me,onAdd}){
 }
 
 // ── SCENARIOS ─────────────────────────────────────
-function Scenarios({scens,me,onSubmit,onApprove,onReject}){
+function Scenarios({scens,me,onSubmit,onApprove,onReject,loading}){
   const [filter,setFilter]=useState("전체");
   const [expanded,setExpanded]=useState(null);
   const themes=["전체","공포","로맨스","고전","미스터리","스릴러","코미디"];
@@ -765,6 +828,7 @@ function Scenarios({scens,me,onSubmit,onApprove,onReject}){
   return(
     <div className="fade">
       <Hdr title="시나리오 DB" sub="공식 & 멤버 제보 시나리오" action={<GBtn onClick={onSubmit}>+ 시나리오 제보</GBtn>} />
+      {loading&&<div style={{textAlign:"center",padding:"20px",color:T.muted,fontSize:13}}>⏳ 시나리오 불러오는 중...</div>}
       {me.role==="admin"&&pending.length>0&&(
         <div style={{background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:11,padding:"13px 17px",marginBottom:16}}>
           <div style={{fontSize:13,fontWeight:700,color:T.red,marginBottom:9}}>⏳ 승인 대기 {pending.length}건</div>
