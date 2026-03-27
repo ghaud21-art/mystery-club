@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+8import { useState, useRef, useEffect } from "react";
 
 // ── 스타일 설문 (10문항) ───────────────────────────
 const SURVEY = [
@@ -228,7 +228,9 @@ export default function App(){
       }
     } catch(e) { console.error("❌ 멤버 로드 실패:", e.message); }
   };
-
+useEffect(()=>{
+  loadMembers();
+},[]);
   const addRec=r=>{setRecs(p=>[...p,{...r,id:Date.now()}]);close();};
   const updRec=r=>{setRecs(p=>p.map(x=>x.id===r.id?r:x));close();};
   const delRec=id=>setRecs(p=>p.filter(r=>r.id!==id));
